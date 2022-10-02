@@ -18,9 +18,8 @@ def main():
     PATH_WIKI_XML = '/mnt/d/newest'
     FILENAME_WIKI = 'enwiki-latest-pages-articles-multistream.xml'
     pathWikiXML = os.path.join(PATH_WIKI_XML, FILENAME_WIKI)
-
-    count = 0
     redirect = False
+    
     for event, elem in etree.iterparse(pathWikiXML, events=('start', 'end')):
         tname = strip_tag_name(elem.tag)
 
@@ -39,9 +38,7 @@ def main():
                 for link in links:
                     cur.execute("INSERT INTO pages VALUES(?, ?)", (title, link))          
 
-        count += 1
-        if count == 1000000:
-            print(count)
         con.commit()
 
 
+main()
