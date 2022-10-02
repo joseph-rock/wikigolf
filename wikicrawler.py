@@ -36,7 +36,6 @@ def main():
                 continue
             elif tname == 'text' and not redirect:
                 links = re.findall('(?:\[{2})([\w\s]+)(?:[|\w\s]*)(?:\]{2})', elem.text)
-
                 for link in links:
                     cur.execute("INSERT INTO pages VALUES(?, ?)", (title, link))          
 
