@@ -1,6 +1,11 @@
 import xml.etree.ElementTree as etree
 import re
 import os
+import sqlite3
+
+con = sqlite3.connect("wikilinks.db")
+cur = con.cursor()
+cur.execute("CREATE TABLE IF NOT EXISTS pages(page, link)")
 
 PATH_WIKI_XML = '/mnt/d/newest'
 FILENAME_WIKI = 'enwiki-latest-pages-articles-multistream.xml'
@@ -20,7 +25,7 @@ for event, elem in etree.iterparse(pathWikiXML, events=('start', 'end')):
 
     if event == 'start':
         if tname == "title":
-            t = elem.text
+            title = elem.text
         if tname == "redirect":
             redirect = True
 
@@ -29,15 +34,16 @@ for event, elem in etree.iterparse(pathWikiXML, events=('start', 'end')):
             redirect = False
             continue
         elif tname == 'text' and not redirect:
-            l = re.findall('(?:\[{2})([\w\s]+)(?:[|\w\s]*)(?:\]{2})', elem.text)
-            print(f"{count})--{t} \n {l}")
+            links = re.findall('(?:\[{2})([\w\s]+)(?:[|\w\s]*)(?:\]{2})', elem.text)
 
-    #     t = elem.text
-    #     print(t)
-    # elif tname == "text":
-    #     l = re.findall("\[\[.+\]\]", elem.text)
-    #     print(f"{t} : {l}")
+            for link in links:
+                cur.execute("INSERT INTO pages VALUES(?, ?)", (title, link))
+                
 
-    # count += 1
-    # if count == 200:
-    #     break
+    count += 1
+    if count == 1000000:
+        print(count)
+
+
+    con.commit()
+
