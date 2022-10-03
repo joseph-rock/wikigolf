@@ -1,3 +1,4 @@
+from typing import List
 import xml.etree.ElementTree as etree
 import re
 import os
@@ -17,6 +18,7 @@ def main():
 
     PATH_WIKI_XML = '/mnt/d/newest'
     FILENAME_WIKI = 'enwiki-latest-pages-articles-multistream.xml'
+    REGEX = r'(?:\[\[)([^\[\]\|]+)(?:\|[^\[\]]+)?(?:\]\])'
     pathWikiXML = os.path.join(PATH_WIKI_XML, FILENAME_WIKI)
     redirect = False
 
@@ -35,26 +37,28 @@ def main():
                 redirect = False
                 continue
             elif tname == 'text' and not redirect:
-                try:
-                    links = re.findall('(?:\[{2})([\w\s]+)(?:[|\w\s]*)(?:\]{2})', elem.text)
+                try: 
+                    matches = re.finditer(REGEX, elem.text)
                     block = []
-                    for link in links:
-                        block.append((title, link))
+                    for match in matches:
+                        block.append((title, match.group(1)))
                         
                     cur.executemany("INSERT INTO pages VALUES(?, ?)", block)          
                     con.commit()
+                    elem.clear()
                 except TypeError:
                     print(title)
-        count += 1
-        if count > 100000:
-            print(count)
-            count = 0
-            con.commit
-            con.close()
-            con = sqlite3.connect("/mnt/d/wikilinks.db")
-            cur = con.cursor()
+
+        # count += 1
+        # if count > 10000:
+        #     break
+            # print(count)
+            # count = 0
+            # con.close()
+            # con = sqlite3.connect("/mnt/d/wikilinks.db")
+            # cur = con.cursor()
     
-    con.commit
+    con.commit()
     con.close()
             
 
