@@ -1,8 +1,10 @@
-from typing import List
 import xml.etree.ElementTree as etree
 import re
 import os
 import sqlite3
+
+import time
+import progressbar
 
 def strip_tag_name(t):
     idx = t.rfind("}")
@@ -11,56 +13,53 @@ def strip_tag_name(t):
     return t
 
 
-def main():
+def db(con, cur, block):
+    cur.executemany("INSERT INTO pages VALUES(?, ?)", block)          
+    con.commit()
+
+def xmlParse():
+    PATH_WIKI_XML = '/mnt/d/newest'
+    FILENAME_WIKI = 'enwiki-latest-pages-articles-multistream.xml'
+    pathWikiXML = os.path.join(PATH_WIKI_XML, FILENAME_WIKI)
+
     con = sqlite3.connect("/mnt/d/wikilinks.db")
     cur = con.cursor()
     cur.execute("CREATE TABLE IF NOT EXISTS pages(page, link)")
 
-    PATH_WIKI_XML = '/mnt/d/newest'
-    FILENAME_WIKI = 'enwiki-latest-pages-articles-multistream.xml'
-    REGEX = r'(?:\[\[)([^\[\]\|]+)(?:\|[^\[\]]+)?(?:\]\])'
-    pathWikiXML = os.path.join(PATH_WIKI_XML, FILENAME_WIKI)
-    redirect = False
-
-    count = 0
-    for event, elem in etree.iterparse(pathWikiXML, events=('start', 'end')):
+    # old
+    # REGEX = r'(?:\[\[)([^\[\]\|]+)(?:\|[^\[\]]+)?(?:\]\])'
+    # new
+    REGEX = r'(?:\[\[)([^\[\]]+?)(?:\|[^\[\]]*)?(?:\]\])'
+    
+    bar = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
+    i = 0
+    for _, elem in etree.iterparse(pathWikiXML):
         tname = strip_tag_name(elem.tag)
 
-        if event == 'start':
-            if tname == "title":
-                title = elem.text
-            if tname == "redirect":
-                redirect = True
+        if tname == 'title':
+            title = elem.text
+        elif tname == 'text' and elem.text[:9] != '#REDIRECT':
+            text = elem.text
+            try: 
+                matches = re.finditer(REGEX, text)
+                block = []
+                for match in matches:
+                    block.append((title, match.group(1)))
+                cur.executemany("INSERT INTO pages VALUES(?, ?)", block)          
+                con.commit()
+                
+                bar.update(i)
+                i += 1
+                    
+            except TypeError:
+                print(f'Failed on: {title}')
 
-        elif event == 'end':
-            if tname == 'text' and redirect:
-                redirect = False
-                continue
-            elif tname == 'text' and not redirect:
-                try: 
-                    matches = re.finditer(REGEX, elem.text)
-                    block = []
-                    for match in matches:
-                        block.append((title, match.group(1)))
-                        
-                    cur.executemany("INSERT INTO pages VALUES(?, ?)", block)          
-                    con.commit()
-                    elem.clear()
-                except TypeError:
-                    print(title)
+        elem.clear()
+        
 
-        # count += 1
-        # if count > 10000:
-        #     break
-            # print(count)
-            # count = 0
-            # con.close()
-            # con = sqlite3.connect("/mnt/d/wikilinks.db")
-            # cur = con.cursor()
-    
-    con.commit()
     con.close()
-            
 
 
-main()
+if __name__ == '__main__':
+    xmlParse()
+    
