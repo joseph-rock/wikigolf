@@ -3,7 +3,7 @@ import xml.etree.ElementTree as etree
 import re
 import os
 import sqlite3
-
+import logging
 import time
 import progressbar
 
@@ -43,7 +43,9 @@ def xml_worker(q):
     i = 0
     block = []
 
-    print(os.getpid(),"working")
+    logging.basicConfig(filename="std.log", filemode='a', format='%(asctime)s %(message)s')
+    logging.error("Start")
+    
     for _, elem in etree.iterparse(PATH):
         tname = strip_tag_name(elem.tag)
 
@@ -66,17 +68,18 @@ def xml_worker(q):
                 i += 1
                     
             except TypeError:
-                print(f'Failed on: {title}')
+                logging.error(f'Failed on: {title}\n{elem.text}')
 
             except:
-                print("Something else happened")
+                logging.error(f"Something else happened: {title}\n{elem.text}")
 
         elem.clear()
         
     if len(block) > 0:
         q.put(block)
     q.put(None)
-    print(os.getpid(),"finished")
+
+    logging.error("Finish")
 
 
 if __name__ == '__main__':
@@ -97,7 +100,5 @@ if __name__ == '__main__':
     sqlQ.close()
     sqlQ.join_thread()
 
-    # xmlP.close()
-    # sqlP.close()
     xmlP.join()
     sqlP.join()
