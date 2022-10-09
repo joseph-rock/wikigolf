@@ -1,3 +1,4 @@
+from multiprocessing import Queue, Process
 import xml.etree.ElementTree as etree
 import re
 import os
@@ -13,53 +14,90 @@ def strip_tag_name(t):
     return t
 
 
-def db(con, cur, block):
-    cur.executemany("INSERT INTO pages VALUES(?, ?)", block)          
-    con.commit()
-
-def xmlParse():
-    PATH_WIKI_XML = '/mnt/d/newest'
-    FILENAME_WIKI = 'enwiki-latest-pages-articles-multistream.xml'
-    pathWikiXML = os.path.join(PATH_WIKI_XML, FILENAME_WIKI)
-
+def sql_worker(q):
     con = sqlite3.connect("/mnt/d/wikilinks.db")
     cur = con.cursor()
     cur.execute("CREATE TABLE IF NOT EXISTS pages(page, link)")
 
-    # old
-    # REGEX = r'(?:\[\[)([^\[\]\|]+)(?:\|[^\[\]]+)?(?:\]\])'
-    # new
+    print(os.getpid(),"working")
+    while True:
+        block = q.get()
+
+        if block is None:
+            break
+
+        cur.executemany("INSERT INTO pages VALUES(?, ?)", block)          
+        con.commit()
+
+    con.close()
+    print(os.getpid(),"finished")
+
+
+def xml_worker(q):
+    PATH_WIKI_XML = '/mnt/d/newest'
+    FILENAME_WIKI = 'enwiki-latest-pages-articles-multistream.xml'
+    PATH = os.path.join(PATH_WIKI_XML, FILENAME_WIKI)
     REGEX = r'(?:\[\[)([^\[\]]+?)(?:\|[^\[\]]*)?(?:\]\])'
-    
+
     bar = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
     i = 0
-    for _, elem in etree.iterparse(pathWikiXML):
+    block = []
+
+    print(os.getpid(),"working")
+    for _, elem in etree.iterparse(PATH):
         tname = strip_tag_name(elem.tag)
 
         if tname == 'title':
             title = elem.text
-        elif tname == 'text' and elem.text[:9] != '#REDIRECT':
+        elif tname == 'text':
             text = elem.text
             try: 
+                if elem.text[:9] == '#REDIRECT':
+                    continue
                 matches = re.finditer(REGEX, text)
-                block = []
                 for match in matches:
                     block.append((title, match.group(1)))
-                cur.executemany("INSERT INTO pages VALUES(?, ?)", block)          
-                con.commit()
-                
+
+                if len(block) > 10000:
+                    q.put(block)
+                    block = []
+
                 bar.update(i)
                 i += 1
                     
             except TypeError:
                 print(f'Failed on: {title}')
 
+            except:
+                print("Something else happened")
+
         elem.clear()
         
-
-    con.close()
+    if len(block) > 0:
+        q.put(block)
+    q.put(None)
+    print(os.getpid(),"finished")
 
 
 if __name__ == '__main__':
-    xmlParse()
+    print(os.getpid(),"working")
+    con = sqlite3.connect("/mnt/d/wikilinks.db")
+    cur = con.cursor()
+    cur.execute("CREATE TABLE IF NOT EXISTS pages(page, link)")
+    con.close()
+
+    sqlQ = Queue(1000)
+
+    xmlP = Process(target=xml_worker, args=(sqlQ,))
+    sqlP = Process(target=sql_worker, args=(sqlQ,))
     
+    xmlP.start()
+    sqlP.start()
+
+    sqlQ.close()
+    sqlQ.join_thread()
+
+    # xmlP.close()
+    # sqlP.close()
+    xmlP.join()
+    sqlP.join()
