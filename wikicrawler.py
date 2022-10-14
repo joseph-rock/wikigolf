@@ -1,4 +1,3 @@
-from distutils.log import error
 from multiprocessing import Queue, Process
 import xml.etree.ElementTree as etree
 import re
@@ -113,12 +112,18 @@ def sql_worker(q):
             count = 0
 
     con.commit()
+
+    cur.execute("CREATE INDEX value_idx ON pages(page);")
+    con.commit()
+    cur.execute("CREATE INDEX link_idx ON pages(link);")
+    con.commit()
+
     con.close()
     endLog(os.getpid(), "SQL")   
 
 
 if __name__ == '__main__':
-    PATH_WIKI_XML = '/mnt/d/newest/enwiki-latest-pages-articles-multistream.xml'
+    PATH_WIKI_XML = '/mnt/d/xml/enwiki-latest-pages-articles-multistream.xml'
     PATH_DB = '/mnt/d/wikilinks.db'
     REGEX = r'(?:\[\[)([^\[\]]+?)(?:\|[^\[\]]*)?(?:\]\])'
 
